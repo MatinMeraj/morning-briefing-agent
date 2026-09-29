@@ -1,0 +1,16 @@
+# Secrets — NEVER commit these
+credentials.json
+token.json
+run_briefing.sh
+
+# Personal daily output
+briefing_*.txt
+
+# Python virtual environment
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+tasks.txt
+schedule.txt
