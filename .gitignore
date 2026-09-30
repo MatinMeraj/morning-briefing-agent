@@ -14,3 +14,6 @@ __pycache__/
 *.pyc
 tasks.txt
 schedule.txt
+launchd_err.log
+launchd_out.log
+notion_test.py

@@ -5,9 +5,16 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 import anthropic
+import base64
+from email.mime.text import MIMEText
+import os
+from notion_client import Client
 
-# ---------- CONFIG ----------
-SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
+
+SCOPES = [
+    "https://www.googleapis.com/auth/calendar.readonly",
+    "https://www.googleapis.com/auth/gmail.send",
+]
 TIMEZONE = ZoneInfo("America/Vancouver")
 
 # ---------- GOOGLE CALENDAR ----------
@@ -60,10 +67,59 @@ def get_todays_events():
 
     return "\n".join(lines) if lines else "No fixed events left today."
 
+# ---------- EMAIL ----------
+def get_gmail_service():
+    creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+    return build("gmail", "v1", credentials=creds)
+
+def send_email(briefing_text):
+    service = get_gmail_service()
+
+    message = MIMEText(briefing_text)
+    message["to"] = "matinemeraj@gmail.com"
+    message["from"] = "matinemeraj@gmail.com"
+    message["subject"] = "Your Morning Briefing"
+
+    raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+
+    service.users().messages().send(
+        userId="me",
+        body={"raw": raw},
+    ).execute()
+
+    print("Briefing emailed to you.")
+
 # ---------- TASKS ----------
 def get_tasks():
-    with open("tasks.txt") as f:
-        return f.read()
+    notion = Client(auth=os.environ["NOTION_TOKEN"])
+    DATABASE_ID = "3ebca17cc6cb80c080b0cecf052aa08e"
+
+    db = notion.databases.retrieve(database_id=DATABASE_ID)
+    data_source_id = db["data_sources"][0]["id"]
+    results = notion.data_sources.query(data_source_id=data_source_id)
+
+    tasks = []
+    for page in results["results"]:
+        props = page["properties"]
+        title = props["Task"]["title"]
+        name = title[0]["plain_text"] if title else "(no name)"
+        done = props["Done"]["checkbox"]
+        if done:
+            continue
+        due = props["Due date"]["date"]
+        due_str = due["start"] if due else "no due date"
+        priority_obj = props["Priority"]["select"]
+        priority = priority_obj["name"] if priority_obj else "none"
+        category_obj = props["Category"]["select"]
+        category = category_obj["name"] if category_obj else "none"
+        context_obj = props["Context"]["rich_text"]
+        context = context_obj[0]["plain_text"] if context_obj else ""
+        line = f"{name} | due: {due_str} | priority: {priority} | category: {category}"
+        if context:
+            line += f" | context: {context}"
+        tasks.append(line)
+
+    return "\n".join(tasks) if tasks else "No tasks in Notion."
 
 # ---------- CLAUDE BRIEFING ----------
 def build_briefing(schedule, tasks):
@@ -106,5 +162,6 @@ def main():
     tasks = get_tasks()
     briefing = build_briefing(schedule, tasks)
     print(briefing)
+    send_email(briefing)
 
 main()
