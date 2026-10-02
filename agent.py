@@ -9,6 +9,7 @@ import base64
 from email.mime.text import MIMEText
 import os
 from notion_client import Client
+import markdown
 
 
 SCOPES = [
@@ -75,7 +76,8 @@ def get_gmail_service():
 def send_email(briefing_text):
     service = get_gmail_service()
 
-    message = MIMEText(briefing_text)
+    html_body = markdown.markdown(briefing_text, extensions=["extra", "nl2br"])
+    message = MIMEText(html_body, "html")
     message["to"] = "matinemeraj@gmail.com"
     message["from"] = "matinemeraj@gmail.com"
     message["subject"] = "Your Morning Briefing"
